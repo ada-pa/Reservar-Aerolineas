@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Diagramas — Sistema de Reservas de Aerolínea</title>
+<style>
+  :root{
+    --bg: #12181f;
+    --line: #3f5468;
+    --line-soft: #2a3844;
+    --accent: #5fb4b0;
+    --text: #e7edf1;
+    --text-dim: #93a4b0;
+    --system: #223140;
+    --entity: #1c2731;
+    --er: #21262f;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin:0; height:100%; background: var(--bg);
+    font-family: "Iowan Old Style","Palatino Linotype",Georgia,serif;
+    color: var(--text);
+    overflow: hidden;
+  }
+  #toolbar{
+    position: fixed; top:0; left:0; right:0; z-index: 30;
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 12px 22px;
+    background: linear-gradient(to bottom, rgba(18,24,31,0.97), rgba(18,24,31,0.88));
+    border-bottom: 1px solid var(--line-soft);
+    font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  #toolbar h1{
+    font-family: inherit; font-size: 15px; font-weight: 600;
+    letter-spacing: 0.2px; margin:0; color: var(--text);
+  }
+  #toolbar h1 span{ display:block; font-size: 12px; color: var(--text-dim); margin-top: 2px; font-weight: 400; }
+
+  #tabs{ display:flex; gap:6px; }
+  .tab-btn{
+    font-family: inherit; font-size: 12.5px; color: var(--text-dim);
+    background: transparent; border: 1px solid var(--line);
+    border-radius: 5px; padding: 7px 14px; cursor: pointer;
+    transition: color .15s, border-color .15s, background .15s;
+  }
+  .tab-btn:hover{ color: var(--text); border-color: var(--accent); }
+  .tab-btn.active{ color: var(--bg); background: var(--accent); border-color: var(--accent); font-weight: 600; }
+
+  #right-controls{ display:flex; align-items:center; gap: 16px; }
+  #hint{ font-size: 11.5px; color: var(--text-dim); text-align:right; line-height:1.5; }
+  #reset-btn{
+    font-family: inherit; font-size: 12px; color: var(--text-dim);
+    background: transparent; border: 1px solid var(--line);
+    border-radius: 4px; padding: 6px 12px; cursor: pointer;
+  }
+  #reset-btn:hover{ color: var(--text); border-color: var(--accent); }
+
+  .canvas-wrap{
+    position:absolute; inset:0; top:84px; overflow: auto; display:none;
+  }
+  .canvas-wrap.active{ display:block; }
+  .canvas{
+    position: relative;
+    background-image:
+      linear-gradient(var(--line-soft) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
+    background-size: 40px 40px;
+    background-position: -1px -1px;
+  }
+  #canvas-context{ width: 1500px; height: 1200px; }
+  #canvas-er{ width: 2000px; height: 1500px; }
+
+  svg.connectors{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+
+  .node{
+    position:absolute; border-radius: 3px; cursor: grab; user-select: none;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+  }
+  .node:active{ cursor: grabbing; }
+  .node.dragging{ box-shadow: 0 14px 34px rgba(0,0,0,0.5); z-index: 15; }
+  .node .label{ outline: none; line-height: 1.3; }
+  .node .sub{
+    font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+    font-size: 11px; color: var(--text-dim); margin-top: 6px; outline: none; max-width: 220px;
+  }
+  .node[contenteditable="true"]:focus,
+  .node .label[contenteditable="true"]:focus,
+  .node .sub[contenteditable="true"]:focus{ box-shadow: inset 0 0 0 1px var(--accent); }
+
+  /* context diagram styling */
+  .system{
+    width: 300px; min-height: 210px; padding: 14px 18px;
+    background: var(--system); border: 1px solid var(--accent);
+  }
+  .system .label{ font-size: 17px; font-weight: 600; }
+  .system ul{
+    font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+    text-align: left; font-size: 11.5px; color: var(--text-dim);
+    margin: 10px 0 0; padding-left: 16px; line-height: 1.7;
+  }
+  .entity{
+    width: 190px; min-height: 76px; padding: 14px 18px;
+    background: var(--entity); border: 1px solid var(--line);
+  }
+  .entity .label{ font-size: 15px; font-weight: 600; letter-spacing: 0.3px; }
+  .entity:hover{ border-color: var(--accent); }
+
+  /* ER diagram styling */
+  .er-node{
+    width: 160px; min-height: 50px; padding: 8px 10px;
+    background: var(--er); border: 1px solid var(--line);
+    font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+  }
+  .er-node .label{ font-size: 12.5px; font-weight: 600; }
+  .er-node:hover{ border-color: var(--accent); }
+  .er-node.actor{ background: var(--system); border-color: var(--accent); }
+
+  .edge-label{
+    position:absolute;
+    font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+    font-size: 10px; font-style: italic; color: var(--text-dim);
+    background: var(--bg); padding: 1px 6px; border-radius: 2px;
+    outline: none; white-space: nowrap; pointer-events: all; cursor: text;
+    transform: translate(-50%, -50%);
+  }
+  @media(max-width:700px){
+    html,body{overflow:auto}
+    #toolbar{position:fixed;padding:10px 12px;gap:10px;align-items:stretch;flex-direction:column}
+    #toolbar h1{font-size:14px}#toolbar h1 span{font-size:11px}
+    #tabs{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+    .tab-btn{font-size:11px;padding:8px 5px}
+    #right-controls{justify-content:space-between;gap:8px}
+    #hint{text-align:left;font-size:10px;line-height:1.3;max-width:75%}
+    #reset-btn{flex-shrink:0;padding:7px 9px}
+    .canvas-wrap{position:fixed;inset:0;top:142px;overflow:auto;-webkit-overflow-scrolling:touch}
+  }
+  @media(max-width:380px){.canvas-wrap{top:154px}#toolbar{gap:8px}.tab-btn{font-size:10px}}
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <h1>Sistema de Reservas de Aerolínea<span>Diagramas interactivos</span></h1>
+  <div id="tabs">
+    <button class="tab-btn active" data-target="context">Diagrama de contexto</button>
+    <button class="tab-btn" data-target="er">Entidades y relaciones</button>
+  </div>
+  <div id="right-controls">
+    <div id="hint">Arrastra los cuadros para moverlos · haz clic en un texto para editarlo</div>
+    <button id="reset-btn">Reordenar</button>
+  </div>
+</div>
+
+<!-- ===================== DIAGRAMA DE CONTEXTO ===================== -->
+<div class="canvas-wrap active" id="wrap-context">
+  <div class="canvas" id="canvas-context">
+    <svg class="connectors" id="svg-context"></svg>
+
+    <div class="node system" id="c-sistema" data-x="620" data-y="470">
+      <div class="label" contenteditable="true">SISTEMA DE RESERVAS<br>DE AEROLÍNEA</div>
+      <ul contenteditable="true">
+        <li>Gestión de vuelos</li>
+        <li>Gestión de reservas</li>
+        <li>Gestión de pasajeros</li>
+        <li>Gestión de aerolíneas</li>
+        <li>Gestión de aviones</li>
+        <li>Pagos y boletos</li>
+        <li>Check-in y equipaje</li>
+      </ul>
+    </div>
+
+    <div class="node entity" id="c-admin" data-x="655" data-y="90">
+      <div class="label" contenteditable="true">ADMINISTRADOR</div>
+      <div class="sub" contenteditable="true">Gestión del sistema</div>
+    </div>
+    <div class="node entity" id="c-agente" data-x="140" data-y="470">
+      <div class="label" contenteditable="true">AGENTE DE RESERVAS</div>
+      <div class="sub" contenteditable="true">Solicitudes de reservas y consultas</div>
+    </div>
+    <div class="node entity" id="c-aerolinea" data-x="1130" data-y="470">
+      <div class="label" contenteditable="true">AEROLÍNEA</div>
+      <div class="sub" contenteditable="true">Información de vuelos, aviones y rutas</div>
+    </div>
+    <div class="node entity" id="c-pasajero" data-x="260" data-y="850">
+      <div class="label" contenteditable="true">PASAJERO</div>
+      <div class="sub" contenteditable="true">Reservas, check-in y boletos</div>
+    </div>
+    <div class="node entity" id="c-aeropuerto" data-x="990" data-y="850">
+      <div class="label" contenteditable="true">AEROPUERTO</div>
+      <div class="sub" contenteditable="true">Coordinación de vuelos y equipaje</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== DIAGRAMA ENTIDADES / RELACIONES ===================== -->
+<div class="canvas-wrap" id="wrap-er">
+  <div class="canvas" id="canvas-er">
+    <svg class="connectors" id="svg-er"></svg>
+
+    <div class="node er-node actor" id="e-Administrador" data-x="900" data-y="30"><div class="label" contenteditable="true">ADMINISTRADOR</div></div>
+    <div class="node er-node actor" id="e-AgenteReservas" data-x="140" data-y="220"><div class="label" contenteditable="true">AGENTE RESERVAS</div></div>
+    <div class="node er-node actor" id="e-Pasajero" data-x="620" data-y="220"><div class="label" contenteditable="true">PASAJERO</div></div>
+    <div class="node er-node actor" id="e-Aerolinea" data-x="1150" data-y="220"><div class="label" contenteditable="true">AEROLÍNEA</div></div>
+    <div class="node er-node actor" id="e-Aeropuerto" data-x="1700" data-y="220"><div class="label" contenteditable="true">AEROPUERTO</div></div>
+
+    <div class="node er-node" id="e-Reserva" data-x="550" data-y="400"><div class="label" contenteditable="true">RESERVA</div></div>
+    <div class="node er-node" id="e-Vuelo" data-x="900" data-y="400"><div class="label" contenteditable="true">VUELO</div></div>
+    <div class="node er-node" id="e-Avion" data-x="1250" data-y="400"><div class="label" contenteditable="true">AVIÓN</div></div>
+    <div class="node er-node" id="e-Ruta" data-x="1550" data-y="400"><div class="label" contenteditable="true">RUTA</div></div>
+
+    <div class="node er-node" id="e-DispositivoCheckIn" data-x="80" data-y="600"><div class="label" contenteditable="true">DISPOSITIVO CHECK-IN</div></div>
+    <div class="node er-node" id="e-CheckIn" data-x="330" data-y="600"><div class="label" contenteditable="true">CHECK-IN</div></div>
+    <div class="node er-node" id="e-Boleto" data-x="580" data-y="600"><div class="label" contenteditable="true">BOLETO</div></div>
+    <div class="node er-node" id="e-Pago" data-x="830" data-y="600"><div class="label" contenteditable="true">PAGO</div></div>
+    <div class="node er-node" id="e-Asiento" data-x="1080" data-y="600"><div class="label" contenteditable="true">ASIENTO</div></div>
+    <div class="node er-node" id="e-Tripulacion" data-x="1330" data-y="600"><div class="label" contenteditable="true">TRIPULACIÓN</div></div>
+    <div class="node er-node" id="e-Tarifa" data-x="1600" data-y="600"><div class="label" contenteditable="true">TARIFA</div></div>
+
+    <div class="node er-node" id="e-Equipaje" data-x="200" data-y="800"><div class="label" contenteditable="true">EQUIPAJE</div></div>
+    <div class="node er-node" id="e-DetalleReserva" data-x="470" data-y="800"><div class="label" contenteditable="true">DETALLE RESERVA</div></div>
+    <div class="node er-node" id="e-HorarioVuelo" data-x="740" data-y="800"><div class="label" contenteditable="true">HORARIO VUELO</div></div>
+    <div class="node er-node" id="e-HorarioTripulacion" data-x="1330" data-y="800"><div class="label" contenteditable="true">HORARIO TRIPULACIÓN</div></div>
+    <div class="node er-node" id="e-ClaseCabina" data-x="1600" data-y="800"><div class="label" contenteditable="true">CLASE CABINA</div></div>
+  </div>
+</div>
+
+<script>
+/* ---------- generic diagram engine ---------- */
+function positionNode(el){ el.style.left = el.dataset.x+'px'; el.style.top = el.dataset.y+'px'; }
+
+function centerOf(el){
+  return { x: parseFloat(el.dataset.x)+el.offsetWidth/2, y: parseFloat(el.dataset.y)+el.offsetHeight/2 };
+}
+function edgePoint(fromEl, toPoint){
+  const fx=parseFloat(fromEl.dataset.x), fy=parseFloat(fromEl.dataset.y);
+  const w=fromEl.offsetWidth, h=fromEl.offsetHeight;
+  const cx=fx+w/2, cy=fy+h/2;
+  const dx=toPoint.x-cx, dy=toPoint.y-cy;
+  if(dx===0 && dy===0) return {x:cx,y:cy};
+  const scale = Math.min(Math.abs((w/2)/(dx||1e-6)), Math.abs((h/2)/(dy||1e-6)));
+  return { x: cx+dx*scale, y: cy+dy*scale };
+}
+
+function Diagram(canvasEl, svgEl, edges, opts){
+  opts = opts||{};
+  const labels = {}; // edge index -> label div
+  canvasEl.querySelectorAll('.node').forEach(positionNode);
+
+  function draw(){
+    svgEl.innerHTML = `<defs><marker id="arrow-${svgEl.id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5fb4b0"></path></marker></defs>`;
+    edges.forEach((edge, i) => {
+      const fromEl = document.getElementById(edge.from);
+      const toEl = document.getElementById(edge.to);
+      if(!fromEl || !toEl) return;
+      const cFrom = centerOf(fromEl), cTo = centerOf(toEl);
+      const p1 = edgePoint(fromEl, cTo);
+      const p2 = edgePoint(toEl, cFrom);
+      const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+      line.setAttribute('x1',p1.x); line.setAttribute('y1',p1.y);
+      line.setAttribute('x2',p2.x); line.setAttribute('y2',p2.y);
+      line.setAttribute('stroke','#5fb4b0'); line.setAttribute('stroke-width', opts.thin?'1.1':'1.5');
+      line.setAttribute('opacity', opts.thin?'0.45':'0.75');
+      line.setAttribute('marker-end', `url(#arrow-${svgEl.id})`);
+      svgEl.appendChild(line);
+
+      if(edge.label){
+        let lbl = labels[i];
+        if(!lbl){
+          lbl = document.createElement('div');
+          lbl.className='edge-label';
+          lbl.contentEditable='true';
+          lbl.textContent = edge.label;
+          canvasEl.appendChild(lbl);
+          labels[i]=lbl;
+        }
+        const mx=(p1.x+p2.x)/2, my=(p1.y+p2.y)/2;
+        lbl.style.left=mx+'px'; lbl.style.top=my+'px';
+      }
+    });
+  }
+
+  let dragEl=null, offX=0, offY=0;
+  canvasEl.addEventListener('mousedown', e=>{
+    const node = e.target.closest('.node');
+    if(!node || e.target.isContentEditable) return;
+    dragEl=node; node.classList.add('dragging');
+    const rect=node.getBoundingClientRect();
+    offX=e.clientX-rect.left; offY=e.clientY-rect.top;
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', e=>{
+    if(!dragEl || !canvasEl.closest('.canvas-wrap').classList.contains('active')) return;
+    const cRect=canvasEl.getBoundingClientRect();
+    const scroller=canvasEl.parentElement;
+    let x=e.clientX-cRect.left-offX+scroller.scrollLeft;
+    let y=e.clientY-cRect.top-offY+scroller.scrollTop;
+    x=Math.max(0, Math.min(x, canvasEl.offsetWidth-dragEl.offsetWidth));
+    y=Math.max(0, Math.min(y, canvasEl.offsetHeight-dragEl.offsetHeight));
+    dragEl.dataset.x=x; dragEl.dataset.y=y;
+    positionNode(dragEl); draw();
+  });
+  window.addEventListener('mouseup', ()=>{ if(dragEl) dragEl.classList.remove('dragging'); dragEl=null; });
+
+  canvasEl.addEventListener('touchstart', e=>{
+    const node=e.target.closest('.node');
+    if(!node||e.target.isContentEditable) return;
+    dragEl=node; node.classList.add('dragging');
+    const rect=node.getBoundingClientRect(); const t=e.touches[0];
+    offX=t.clientX-rect.left; offY=t.clientY-rect.top;
+  },{passive:true});
+  window.addEventListener('touchmove', e=>{
+    if(!dragEl || !canvasEl.closest('.canvas-wrap').classList.contains('active')) return;
+    const t=e.touches[0]; const cRect=canvasEl.getBoundingClientRect(); const scroller=canvasEl.parentElement;
+    let x=t.clientX-cRect.left-offX+scroller.scrollLeft;
+    let y=t.clientY-cRect.top-offY+scroller.scrollTop;
+    x=Math.max(0, Math.min(x, canvasEl.offsetWidth-dragEl.offsetWidth));
+    y=Math.max(0, Math.min(y, canvasEl.offsetHeight-dragEl.offsetHeight));
+    dragEl.dataset.x=x; dragEl.dataset.y=y;
+    positionNode(dragEl); draw();
+  },{passive:true});
+  window.addEventListener('touchend', ()=>{ if(dragEl) dragEl.classList.remove('dragging'); dragEl=null; });
+
+  window.addEventListener('resize', draw);
+  setTimeout(draw, 50);
+  return { redraw: draw };
+}
+
+/* ---------- context diagram data ---------- */
+const contextEdges = [
+  {from:'c-admin', to:'c-sistema'},
+  {from:'c-agente', to:'c-sistema'},
+  {from:'c-aerolinea', to:'c-sistema'},
+  {from:'c-pasajero', to:'c-sistema'},
+  {from:'c-aeropuerto', to:'c-sistema'}
+];
+const contextDefaults = {
+  'c-sistema':[620,470], 'c-admin':[655,90], 'c-agente':[140,470],
+  'c-aerolinea':[1130,470], 'c-pasajero':[260,850], 'c-aeropuerto':[990,850]
+};
+const diagramContext = Diagram(document.getElementById('canvas-context'), document.getElementById('svg-context'), contextEdges);
+
+/* ---------- ER diagram data ---------- */
+const erEdges = [
+  {from:'e-Administrador', to:'e-AgenteReservas', label:'gestiona'},
+  {from:'e-Administrador', to:'e-Pasajero', label:'gestiona'},
+  {from:'e-Administrador', to:'e-Aerolinea', label:'gestiona'},
+  {from:'e-Administrador', to:'e-Aeropuerto', label:'gestiona'},
+  {from:'e-Administrador', to:'e-Avion', label:'gestiona'},
+  {from:'e-Administrador', to:'e-Vuelo', label:'gestiona'},
+  {from:'e-Administrador', to:'e-Ruta', label:'gestiona'},
+  {from:'e-Administrador', to:'e-Tarifa', label:'gestiona'},
+
+  {from:'e-AgenteReservas', to:'e-Reserva', label:'gestiona'},
+  {from:'e-AgenteReservas', to:'e-Vuelo', label:'consulta'},
+  {from:'e-AgenteReservas', to:'e-Pasajero', label:'atiende'},
+  {from:'e-AgenteReservas', to:'e-CheckIn', label:'realiza'},
+
+  {from:'e-Aerolinea', to:'e-Avion', label:'posee'},
+  {from:'e-Aerolinea', to:'e-Vuelo', label:'opera'},
+  {from:'e-Aerolinea', to:'e-Ruta', label:'ofrece'},
+  {from:'e-Aerolinea', to:'e-Tarifa', label:'establece'},
+
+  {from:'e-Avion', to:'e-Vuelo', label:'asignado a'},
+  {from:'e-Avion', to:'e-Asiento', label:'contiene'},
+
+  {from:'e-Vuelo', to:'e-Aeropuerto', label:'utiliza'},
+  {from:'e-Vuelo', to:'e-Ruta', label:'sigue'},
+  {from:'e-Vuelo', to:'e-Reserva', label:'tiene'},
+  {from:'e-Vuelo', to:'e-Asiento', label:'tiene'},
+  {from:'e-Vuelo', to:'e-Tripulacion', label:'tiene'},
+  {from:'e-Vuelo', to:'e-HorarioVuelo', label:'tiene'},
+
+  {from:'e-Ruta', to:'e-Aeropuerto', label:'conecta'},
+  {from:'e-Ruta', to:'e-Tarifa', label:'tiene'},
+  {from:'e-Tarifa', to:'e-Reserva', label:'define precio'},
+  {from:'e-ClaseCabina', to:'e-Vuelo', label:'disponible en'},
+
+  {from:'e-Pasajero', to:'e-Reserva', label:'realiza'},
+  {from:'e-Pasajero', to:'e-Boleto', label:'posee'},
+  {from:'e-Pasajero', to:'e-Equipaje', label:'registra'},
+  {from:'e-Pasajero', to:'e-CheckIn', label:'realiza'},
+  {from:'e-Pago', to:'e-Pasajero', label:'lo realiza'},
+
+  {from:'e-Reserva', to:'e-DetalleReserva', label:'contiene'},
+  {from:'e-Reserva', to:'e-Boleto', label:'genera'},
+  {from:'e-Reserva', to:'e-Pago', label:'genera'},
+  {from:'e-Reserva', to:'e-Equipaje', label:'incluye'},
+
+  {from:'e-DetalleReserva', to:'e-Asiento', label:'asigna'},
+  {from:'e-DetalleReserva', to:'e-Pasajero', label:'pertenece'},
+
+  {from:'e-Boleto', to:'e-Reserva', label:'pertenece'},
+  {from:'e-Boleto', to:'e-Pasajero', label:'pertenece'},
+  {from:'e-Boleto', to:'e-Vuelo', label:'corresponde a'},
+  {from:'e-Boleto', to:'e-CheckIn', label:'permite'},
+
+  {from:'e-CheckIn', to:'e-Asiento', label:'asigna'},
+  {from:'e-CheckIn', to:'e-Equipaje', label:'registra'},
+  {from:'e-Equipaje', to:'e-Boleto', label:'asociado a'},
+
+  {from:'e-Tripulacion', to:'e-HorarioTripulacion', label:'tiene'},
+  {from:'e-Tripulacion', to:'e-Vuelo', label:'asignada a'},
+
+  {from:'e-DispositivoCheckIn', to:'e-CheckIn', label:'permite'},
+  {from:'e-DispositivoCheckIn', to:'e-Aeropuerto', label:'pertenece a'},
+
+  {from:'e-ClaseCabina', to:'e-Asiento', label:'clasifica'},
+  {from:'e-ClaseCabina', to:'e-Tarifa', label:'determina'}
+];
+const erDefaults = {
+  'e-Administrador':[900,30], 'e-AgenteReservas':[140,220], 'e-Pasajero':[620,220],
+  'e-Aerolinea':[1150,220], 'e-Aeropuerto':[1700,220],
+  'e-Reserva':[550,400], 'e-Vuelo':[900,400], 'e-Avion':[1250,400], 'e-Ruta':[1550,400],
+  'e-DispositivoCheckIn':[80,600], 'e-CheckIn':[330,600], 'e-Boleto':[580,600], 'e-Pago':[830,600],
+  'e-Asiento':[1080,600], 'e-Tripulacion':[1330,600], 'e-Tarifa':[1600,600],
+  'e-Equipaje':[200,800], 'e-DetalleReserva':[470,800], 'e-HorarioVuelo':[740,800],
+  'e-HorarioTripulacion':[1330,800], 'e-ClaseCabina':[1600,800]
+};
+/* Atributos y operaciones resumidos del modelo solicitado. Se consultan al
+   dejar el cursor sobre cada entidad del diagrama. */
+const erClassDetails = {
+  'e-Administrador':'Atributos: IdAdministrador, Nombre, Apellido, FechaNacimiento, Sexo, Celular, Correo, Dirección, Ciudad, Departamento, País. Métodos: GestionarAgente, GestionarPasajero, GestionarAerolinea, GestionarAeropuerto, GestionarAvion, GestionarVuelo, GestionarRuta, GestionarTarifa.',
+  'e-AgenteReservas':'Atributos: IdAgente, Nombre, Apellido, FechaNacimiento, Sexo, Celular, Correo, Dirección, Ciudad, Departamento, País, CodigoAeropuertoAsignado. Métodos: CrearReserva, ModificarReserva, CancelarReserva, ConsultarDisponibilidad, GestionarCheckIn, EmitirBoleto, ConsultarVuelos.',
+  'e-Pasajero':'Atributos: IdPasajero, TipoDocumento, NumeroDocumento, FechaExpedicion, Nombre, Apellido, FechaNacimiento, Sexo, Celular, Correo, Nacionalidad, Direccion, Ciudad, Pais, PreferenciasAsiento, MillasAcumuladas. Métodos: CrearReserva, ConsultarReserva, ModificarReserva, CancelarReserva, VisualizarBoleto, RealizarCheckIn, ConsultarVuelos, GestionarEquipaje.',
+  'e-Aerolinea':'Atributos: CodigoAerolinea, NombreAerolinea, PaisOrigen, CodigoIATA, CodigoICAO, SitioWeb, TelefonoContacto, CorreoContacto. Métodos: GestionarFlota, GestionarRutas, GestionarTarifas.',
+  'e-Aeropuerto':'Atributos: CodigoAeropuerto, NombreAeropuerto, Ciudad, Pais, CodigoIATA, CodigoICAO, ZonaHoraria, NumeroTerminales. Métodos: administración de aeropuertos.',
+  'e-Avion':'Atributos: CodigoAvion, Modelo, Fabricante, CapacidadTotal, CapacidadEconomica, CapacidadBusiness, CapacidadPrimera, AnioFabricacion, Estado, CodigoAerolinea. Métodos: AsignarVuelo, ConsultarDisponibilidadAsientos.',
+  'e-Vuelo':'Atributos: CodigoVuelo, CodigoAerolinea, CodigoAvion, AeropuertoOrigen, AeropuertoDestino, FechaSalida, HoraSalida, FechaLlegada, HoraLlegada, Duracion, EstadoVuelo, PuertaEmbarque, Terminal. Métodos: ConsultarDisponibilidad, ActualizarEstado, AsignarTripulacion.',
+  'e-Ruta':'Atributos: CodigoRuta, AeropuertoOrigen, AeropuertoDestino, DistanciaKm, TiempoEstimado, FrecuenciaSemanal. Métodos: administración de rutas.',
+  'e-Reserva':'Atributos: CodigoReserva, IdPasajero, CodigoVuelo, FechaReserva, EstadoReserva, ClaseCabina, NumeroAsientos, PrecioTotal, CodigoAgente, MetodoPago. Métodos: ConfirmarReserva, CancelarReserva, ModificarReserva, CalcularPrecio.',
+  'e-DetalleReserva':'Atributos: CodigoDetalle, CodigoReserva, IdPasajero, NombrePasajero, ApellidoPasajero, NumeroAsiento, ClaseCabina, PrecioUnitario, Estado. Métodos: gestión del detalle de asientos y pasajeros.',
+  'e-Asiento':'Atributos: CodigoAsiento, CodigoAvion, CodigoVuelo, NumeroAsiento, Fila, Columna, ClaseCabina, Estado, Ubicacion. Métodos: ReservarAsiento, LiberarAsiento, CambiarEstado.',
+  'e-Boleto':'Atributos: CodigoBoleto, CodigoReserva, IdPasajero, CodigoVuelo, NumeroAsiento, ClaseCabina, FechaEmision, Precio, EstadoBoleto, CodigoBarras. Métodos: EmitirBoleto, AnularBoleto, ReimprimirBoleto.',
+  'e-Pago':'Atributos: CodigoPago, CodigoReserva, IdPasajero, Monto, Moneda, MetodoPago, FechaPago, EstadoPago, ReferenciaTransaccion, NumeroCuotas. Métodos: ProcesarPago, ReembolsarPago, ConsultarEstado.',
+  'e-Equipaje':'Atributos: CodigoEquipaje, CodigoReserva, IdPasajero, PesoKg, Dimensiones, TipoEquipaje, Estado, CodigoBarras, ExcesoPeso, CostoAdicional. Métodos: RegistrarEquipaje, ActualizarEstado, CalcularExceso.',
+  'e-ClaseCabina':'Atributos: CodigoClase, NombreClase, Descripcion, FactorPrecio, EquipajePermitidoKg, ServiciosIncluidos, PrioridadEmbarque. Métodos: administración de clases de cabina.',
+  'e-Tarifa':'Atributos: CodigoTarifa, CodigoRuta, CodigoClase, PrecioBase, Moneda, Temporada, FechaInicioVigencia, FechaFinVigencia, Restricciones, PoliticaCancelacion. Métodos: CalcularPrecioFinal, AplicarDescuento.',
+  'e-Tripulacion':'Atributos: IdTripulante, Nombre, Apellido, TipoTripulante, Licencia, FechaNacimiento, Celular, Correo, HorasVuelo, Estado. Métodos: AsignarVuelo, ConsultarHorario.',
+  'e-HorarioVuelo':'Atributos: CodigoHorario, CodigoVuelo, DiaSemana, HoraSalida, HoraLlegada, Frecuencia, Temporada, Estado. Métodos: administración de horarios de vuelo.',
+  'e-CheckIn':'Atributos: CodigoCheckIn, CodigoBoleto, IdPasajero, CodigoVuelo, FechaCheckIn, HoraCheckIn, PuertaEmbarque, NumeroAsiento, Estado, EquipajeRegistrado. Métodos: RealizarCheckIn, AsignarAsiento, GenerarPaseAbordar.',
+  'e-HorarioTripulacion':'Atributos: CodigoHorarioTripulacion, IdTripulante, NombreTripulante, CodigoVuelo, Fecha, HoraInicio, HoraFin, Rol, Estado. Métodos: gestión de horarios de tripulación.',
+  'e-DispositivoCheckIn':'Atributos: CodigoDispositivo, CodigoAeropuerto, Ubicacion, TipoDispositivo, Estado. Métodos: RegistrarCheckIn, LeerBoleto, ImprimirPase.'
+};
+Object.entries(erClassDetails).forEach(([id, details])=>{
+  const node=document.getElementById(id);
+  if(node) node.title=details;
+});
+const diagramEr = Diagram(document.getElementById('canvas-er'), document.getElementById('svg-er'), erEdges, {thin:true});
+
+/* ---------- tabs ---------- */
+const tabBtns = document.querySelectorAll('.tab-btn');
+const wraps = { context: document.getElementById('wrap-context'), er: document.getElementById('wrap-er') };
+let activeKey = 'context';
+tabBtns.forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    tabBtns.forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    Object.values(wraps).forEach(w=>w.classList.remove('active'));
+    activeKey = btn.dataset.target;
+    wraps[activeKey].classList.add('active');
+    setTimeout(()=> (activeKey==='context'?diagramContext:diagramEr).redraw(), 30);
+  });
+});
+
+/* ---------- reset button (applies to active diagram) ---------- */
+document.getElementById('reset-btn').addEventListener('click', ()=>{
+  const defs = activeKey==='context' ? contextDefaults : erDefaults;
+  Object.entries(defs).forEach(([id,[x,y]])=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    el.dataset.x=x; el.dataset.y=y; positionNode(el);
+  });
+  (activeKey==='context'?diagramContext:diagramEr).redraw();
+});
+</script>
+</body>
+</html>
