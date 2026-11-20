@@ -1,0 +1,40 @@
+GUÍA BREVE — SISTEMA DE RESERVAS AEROGESTIÓN
+
+PROPÓSITO Y USUARIOS
+Es un prototipo de un sistema interno para una aerolínea. Lo usarían agentes
+de reservas para atender pasajeros y gestionar reservas y check-in, y
+administradores para consultar la operación y organizar recursos.
+
+MÓDULOS
+- Panel principal: resumen de vuelos, reservas, pasajeros e ingresos.
+- Vuelos: consulta, filtros y programación de vuelos.
+- Reservas: creación, búsqueda, asignación de asiento y registro simulado del
+  pago.
+- Pasajeros: consulta y registro básico de pasajeros.
+- Check-in y equipaje: validación de boleto y documento, registro de peso y
+  piezas, y confirmación del check-in.
+- Rutas y tarifas, Tripulación y Reportes: vistas de información de apoyo.
+- Diagramas: modelo de contexto y entidades/relaciones del sistema.
+
+FLUJO PRINCIPAL
+1. El agente crea una reserva para un pasajero, elige vuelo y asiento.
+2. La reserva queda pendiente de pago.
+3. En este prototipo, el agente simula el pago. En producción lo haría el
+   pasajero mediante una pasarela segura, o un agente en ventas asistidas.
+4. Al confirmar el monto, la interfaz marca la reserva como emitida y crea un
+   código de boleto de demostración.
+5. En check-in se valida boleto y documento, se registra equipaje y se cambia
+   el estado de la reserva.
+
+MODELO DEL PROYECTO
+El diagrama ER contiene las 21 entidades del enunciado y sus relaciones. Pasa
+el cursor sobre cada entidad para consultar sus atributos y métodos resumidos.
+Las relaciones muestran, por ejemplo, que la reserva pertenece a pasajero y
+vuelo, puede generar pago y boleto, y contiene detalles de asientos.
+
+ALCANCE TÉCNICO
+La interfaz está hecha con HTML, CSS y JavaScript. Es un prototipo frontend:
+usa datos de ejemplo y localStorage para conservar reservas en el mismo
+navegador. No tiene servidor, base de datos compartida ni cobros reales. Las
+vistas de rutas, tripulación y reportes son principalmente demostrativas; no
+todas las operaciones administrativas del modelo están implementadas.
